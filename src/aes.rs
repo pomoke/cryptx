@@ -89,13 +89,35 @@ impl Aes {
             Self::xor_words(&mut t, &key[i+1])
         }
         //Do last round.
-
         //SubBytes
         Self::sub_words(&mut t);
         //ShiftRows
         Self::shift_rows(&mut t);
         //AddRoundKey
         Self::xor_words(&mut t, &key[N-1]);
+        
+        t
+    }
+
+    /// decrypt is a reverse of encrypt.
+    /// reverse process order and use inverse xform functions.
+    /// See FIPS 197 page 21.
+    fn decrypt<const R:usize,const N:usize>(cryptmsg:&[u8;16],key:[[u8;16];N]) -> [u8;16] {
+        //Init: add round key
+        let mut t = *cryptmsg;
+
+        Aes::xor_words(&mut t, &key[N-1]);
+
+        for i in 0..R {
+            Aes::inv_shift_rows(&mut t);
+            Aes::rsub_words(&mut t);
+            Aes::xor_words(&mut t, &key[N-2-i]);
+            Aes::inv_mix_columns(&mut t);
+        }
+
+        Aes::inv_shift_rows(&mut t);
+        Aes::rsub_words(&mut t);
+        Aes::xor_words(&mut t, &key[0]);
         
         t
     }
@@ -190,16 +212,56 @@ impl Aes {
         *t = r;
     }
 
+    fn inv_shift_rows(t: &mut[u8;16]) {
+        let mut r = *t;
+        // 0 4 8  12 
+        // 1 5 9  13
+        // 2 6 10 14
+        // 3 7 11 15
+
+        // Row 0 is unchanged.
+        r[5]=t[1];
+        r[9]=t[5];
+        r[13]=t[9];
+        r[1]=t[13];
+
+        r[10] = t[2];
+        r[14] = t[6];
+        r[2] = t[10];
+        r[6] = t[14];
+
+        r[15] = t[3];
+        r[3] = t[7];
+        r[7] = t[11];
+        r[11] = t[15];
+        *t = r;
+    }
+
     fn mix_columns(t: &mut[u8;16]) {
         //4 cols.
         let mut b = [0u8;16];
         for i in 0..4 {
             // Do compute on each col.
-            let mut a = [t[4*i+0],t[4*i+1],t[4*i+2],t[4*i+3]];
+            let a = [t[4*i+0],t[4*i+1],t[4*i+2],t[4*i+3]];
             b[4*i+0] = Galois::mul_vec([2,3,1,1],a);
             b[4*i+1] = Galois::mul_vec([1,2,3,1],a);
             b[4*i+2] = Galois::mul_vec([1,1,2,3],a);
             b[4*i+3] = Galois::mul_vec([3,1,1,2],a);
+        }
+        // Copy back.
+        *t = b;
+    }
+
+    fn inv_mix_columns(t: &mut[u8;16]) {
+        //4 cols.
+        let mut b = [0u8;16];
+        for i in 0..4 {
+            // Do compute on each col.
+            let a = [t[4*i+0],t[4*i+1],t[4*i+2],t[4*i+3]];
+            b[4*i+0] = Galois::mul_vec([0x0e,0x0b,0x0d,0x09],a);
+            b[4*i+1] = Galois::mul_vec([0x09,0x0e,0x0b,0x0d],a);
+            b[4*i+2] = Galois::mul_vec([0x0d,0x09,0x0e,0x0b],a);
+            b[4*i+3] = Galois::mul_vec([0x0b,0x0d,0x09,0x0e],a);
         }
         // Copy back.
         *t = b;
@@ -236,13 +298,17 @@ fn test_aes128_key_schedule() {
     }
 }
 
+/// See FIPS 197, page 36.
 #[test]
-fn test_aes128_full() {
+fn test_aes128_encrypt() {
     let msg = <[u8;16]>::from_hex("00112233445566778899aabbccddeeff").unwrap();
     let key = <[u8;16]>::from_hex("000102030405060708090a0b0c0d0e0f").unwrap();
     let ks = Aes::aes128_key_schedule(key);
     let cryptmsg = Aes::encrypt::<9,11>(&msg, ks);
     let crypt = cryptmsg.encode_hex::<String>();
+    assert_eq!(cryptmsg,<[u8;16]>::from_hex("69c4e0d86a7b0430d8cdb78070b4c55a").unwrap());
     println!("{}",crypt);
-
+    let decrypt_msg = Aes::decrypt::<9,11>(&cryptmsg, ks);
+    assert_eq!(decrypt_msg,msg);
+    println!("{}",decrypt_msg.encode_hex::<String>());
 }
