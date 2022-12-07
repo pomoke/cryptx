@@ -86,7 +86,7 @@ impl Aes {
             // MixColumns
             Self::mix_columns(&mut t);
             // AddRoundKey
-            Self::xor_words(&mut t, &current_key)
+            Self::xor_words(&mut t, &key[i+1])
         }
         //Do last round.
 
@@ -97,8 +97,9 @@ impl Aes {
         //AddRoundKey
         Self::xor_words(&mut t, &key[N-1]);
         
-        todo!()
+        t
     }
+
     fn aes128_key_schedule(key: [u8;16]) -> [[u8;16];11] {
         const N : usize = 4;
         const Rounds : usize = 11;
@@ -237,5 +238,11 @@ fn test_aes128_key_schedule() {
 
 #[test]
 fn test_aes128_full() {
+    let msg = <[u8;16]>::from_hex("00112233445566778899aabbccddeeff").unwrap();
+    let key = <[u8;16]>::from_hex("000102030405060708090a0b0c0d0e0f").unwrap();
+    let ks = Aes::aes128_key_schedule(key);
+    let cryptmsg = Aes::encrypt::<9,11>(&msg, ks);
+    let crypt = cryptmsg.encode_hex::<String>();
+    println!("{}",crypt);
 
 }
