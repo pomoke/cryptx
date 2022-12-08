@@ -31,3 +31,6 @@ pub trait StatefulCrypt<T> {
     }
 }
 
+pub trait CryptoHash<const N:usize> {
+    fn hash(data: &[u8]) -> Result<[u8;N],CryptError>;
+}

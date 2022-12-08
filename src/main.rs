@@ -5,6 +5,8 @@ pub mod galois;
 pub mod util;
 pub mod mp;
 pub mod pke;
+pub mod sha256;
+
 fn main() {
     println!("Hello, world!");
 }
