@@ -1,44 +1,40 @@
 /// Multi Precision Compute.
-/// 
-
-use std::ops::{Add,Sub,BitAnd,BitOr,BitXor,Not};
+///
+use std::ops::{Add, BitAnd, BitOr, BitXor, Not, Sub};
 
 #[derive(Clone, Copy, Debug)]
-pub struct LargeInt<const N:usize> {
-    pub data: [u8;N]
+pub struct LargeInt<const N: usize> {
+    pub data: [u8; N],
 }
 
-impl<const N:usize> Default for LargeInt<N> {
+impl<const N: usize> Default for LargeInt<N> {
     fn default() -> Self {
-        let data = [0u8;N];
-        LargeInt{
-            data
-        }
+        let data = [0u8; N];
+        LargeInt { data }
     }
 }
 
-impl<const N:usize> LargeInt<N> {
-    fn pow(&self,rhs: Self) -> Self {
+impl<const N: usize> LargeInt<N> {
+    fn pow(&self, rhs: Self) -> Self {
         todo!()
     }
-
 }
 
-impl<const N:usize> Add for LargeInt<N> {
+impl<const N: usize> Add for LargeInt<N> {
     type Output = LargeInt<N>;
     fn add(self, rhs: Self) -> Self::Output {
         todo!()
     }
 }
 
-impl<const N:usize> Add for &LargeInt<N> {
+impl<const N: usize> Add for &LargeInt<N> {
     type Output = LargeInt<N>;
     fn add(self, rhs: Self) -> Self::Output {
         todo!()
     }
 }
 
-impl<const N:usize> BitXor for &LargeInt<N> {
+impl<const N: usize> BitXor for &LargeInt<N> {
     type Output = LargeInt<N>;
     fn bitxor(self, rhs: Self) -> Self::Output {
         let mut ret = LargeInt::default();
@@ -46,11 +42,11 @@ impl<const N:usize> BitXor for &LargeInt<N> {
             ret.data[i] = self.data[i] ^ rhs.data[i]
         }
         ret
-   }
+    }
 }
 
-impl<const N:usize> LargeInt<N> {
-    pub fn fast_mod(&self,rhs: &LargeInt<N>) -> Self{
+impl<const N: usize> LargeInt<N> {
+    pub fn fast_mod(&self, rhs: &LargeInt<N>) -> Self {
         self + rhs
-    } 
+    }
 }
