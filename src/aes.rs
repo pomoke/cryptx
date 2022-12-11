@@ -4,7 +4,6 @@ use crate::common::*;
 use crate::galois::Galois;
 use crate::util::*;
 use hex::{FromHex, ToHex};
-use std::simd::Simd;
 struct Aes {}
 
 struct AesEcb;
