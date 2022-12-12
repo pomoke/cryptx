@@ -142,9 +142,11 @@ fn test_stream() {
     let mac_key = <[u8;16]>::from_hex("240dc26508f0c9fc65f83138782ad919").unwrap();
     let serial = 1;
     let mut state = AesCtrHmac::new(&aes_key, &mac_key, serial);
-    let data = "114514".as_bytes();
+    let data = "abcdefghijklmnopqrstuvwxyz01234567890!@#$%^&*()".as_bytes();
     let encrypted = state.encrypt_stream(data);
-    let ans = state.decrypt_raw(&encrypted);
-    println!("{:?}",ans.unwrap());
+    let ans = state.decrypt_raw(&encrypted).unwrap();
+    let ans: String = String::from_utf8(ans).unwrap(); 
+    assert_eq!(ans,String::from_utf8(data.to_owned()).unwrap());
+    println!("{}",ans);
 
 }
