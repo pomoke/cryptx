@@ -4,7 +4,7 @@ use crate::common::*;
 use crate::galois::Galois;
 use crate::util::*;
 use hex::{FromHex, ToHex};
-struct Aes {}
+pub struct Aes {}
 
 struct AesEcb;
 
@@ -63,6 +63,12 @@ const RSBox: [u8; 256] = [
 ];
 
 impl Aes {
+    pub fn encrypt128(message: &[u8; 16], key: &[u8; 16]) -> [u8; 16] {
+        todo!()
+    }
+    pub fn decrypt128(message: &[u8; 16], key: &[u8; 16]) -> [u8; 16] {
+        todo!()
+    }
     pub fn encrypt_block(message: &[u8; 16], key: &[u8]) -> Result<[u8; 16], CryptError> {
         todo!()
     }
@@ -71,7 +77,10 @@ impl Aes {
         todo!()
     }
 
-    fn encrypt<const R: usize, const N: usize>(msg: &[u8; 16], key: [[u8; 16]; N]) -> [u8; 16] {
+    pub fn encrypt<const R: usize, const N: usize>(
+        msg: &[u8; 16],
+        key: &[[u8; 16]; N],
+    ) -> [u8; 16] {
         //Init: add round key
         let mut t = *msg;
         let mut current_key = key[0];
@@ -101,9 +110,9 @@ impl Aes {
     /// decrypt is a reverse of encrypt.
     /// reverse process order and use inverse xform functions.
     /// See FIPS 197 page 21.
-    fn decrypt<const R: usize, const N: usize>(
+    pub fn decrypt<const R: usize, const N: usize>(
         cryptmsg: &[u8; 16],
-        key: [[u8; 16]; N],
+        key: &[[u8; 16]; N],
     ) -> [u8; 16] {
         //Init: add round key
         let mut t = *cryptmsg;
@@ -124,7 +133,7 @@ impl Aes {
         t
     }
 
-    fn aes128_key_schedule(key: [u8; 16]) -> [[u8; 16]; 11] {
+    pub fn aes128_key_schedule(key: [u8; 16]) -> [[u8; 16]; 11] {
         const N: usize = 4;
         const Rounds: usize = 11;
         let key32: [u32; N] = Self::bytes_pack_to_word(key);
@@ -273,7 +282,7 @@ impl Aes {
         *t = b;
     }
 
-    fn xor_words(t: &mut [u8; 16], rhs: &[u8; 16]) {
+    pub fn xor_words(t: &mut [u8; 16], rhs: &[u8; 16]) {
         for i in 0..16 {
             t[i] = t[i] ^ rhs[i]
         }
@@ -310,14 +319,14 @@ fn test_aes128_encrypt() {
     let msg = <[u8; 16]>::from_hex("00112233445566778899aabbccddeeff").unwrap();
     let key = <[u8; 16]>::from_hex("000102030405060708090a0b0c0d0e0f").unwrap();
     let ks = Aes::aes128_key_schedule(key);
-    let cryptmsg = Aes::encrypt::<9, 11>(&msg, ks);
+    let cryptmsg = Aes::encrypt::<9, 11>(&msg, &ks);
     let crypt = cryptmsg.encode_hex::<String>();
     assert_eq!(
         cryptmsg,
         <[u8; 16]>::from_hex("69c4e0d86a7b0430d8cdb78070b4c55a").unwrap()
     );
     println!("{}", crypt);
-    let decrypt_msg = Aes::decrypt::<9, 11>(&cryptmsg, ks);
+    let decrypt_msg = Aes::decrypt::<9, 11>(&cryptmsg, &ks);
     assert_eq!(decrypt_msg, msg);
     println!("{}", decrypt_msg.encode_hex::<String>());
 }

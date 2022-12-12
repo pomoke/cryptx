@@ -58,7 +58,7 @@ impl MontgomeryCurvePoint {
             a = a - c;
             b = a * a;
             c = d - f;
-            a = c * todo!();
+            a = c * c; //wrong!
             a = a + d;
             c = c * a;
             a = d * f;

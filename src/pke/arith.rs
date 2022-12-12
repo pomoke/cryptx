@@ -1,8 +1,27 @@
 use crate::mp::LargeInt;
+use hex::ToHex;
+use rand::prelude::*;
+use rand_chacha::ChaCha20Rng;
 use serde::{Deserialize, Serialize};
-use std::{ops::{Add, BitAnd, BitOr, BitXor, Mul, Not, Sub}, num::Wrapping};
-const ITEM25519: P25519FieldItem= P25519FieldItem([0xffed,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0x7fff]);
-const ITEM25519_2: P25519FieldItem= P25519FieldItem([0xffda,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff,0xffff]);
+use std::{
+    cmp::Ordering,
+    num::Wrapping,
+    ops::{Add, BitAnd, BitOr, BitXor, Mul, Not, Sub},
+};
+
+pub const ITEM25519: P25519FieldItem = P25519FieldItem([
+    0xffed, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff,
+    0xffff, 0xffff, 0xffff, 0x7fff,
+]);
+pub const ITEM25519_2: P25519FieldItem = P25519FieldItem([
+    0xffda, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff,
+    0xffff, 0xffff, 0xffff, 0xffff,
+]);
+pub const ZERO: P25519FieldItem = P25519FieldItem([0; 16]);
+pub const ONE: P25519FieldItem = P25519FieldItem([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+pub const TWO: P25519FieldItem = P25519FieldItem([2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+pub const EIGHT: P25519FieldItem =
+    P25519FieldItem([8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 /// This struct stores a number over Z_p=2^255-19.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct P25519FieldItem(pub [i64; 16]);
@@ -90,7 +109,7 @@ impl P25519FieldItem {
         // Check for residue.
         // 0b11111...1110
         let mut b: P25519FieldItem = *self;
-        let mut ans: P25519FieldItem = 1.into();
+        let mut ans: P25519FieldItem = ONE;
         // a^((p-1)/2)
         for i in 0..254 {
             if i != 0 && i != 3 {
@@ -100,56 +119,76 @@ impl P25519FieldItem {
             b = b2;
         }
         ans.clamp();
-        println!("residue: {:?}",ans);
+        //println!("residue: {:?}", ans);
+
         // Compare with 1.
         if ans != 1.into() {
             return None;
         }
 
-        let mut b: P25519FieldItem = 1.into();
-        let mut ans: P25519FieldItem = 1.into();
+        let mut b: P25519FieldItem = *self;
+        let mut ans: P25519FieldItem = ONE;
+
         // Get residue.
         // 0b11111...0110
         // a^((p+3)/8)
         for i in 0..252 {
-            b = b * *self;
             if i != 0 {
                 ans = ans * b;
             }
+            b = b * b;
         }
         ans.carry();
+
+        // Check a^((p-1)/4)
+        let mut b: P25519FieldItem = *self;
+        let mut ans2: P25519FieldItem = ONE;
+        for i in 0..253 {
+            if i != 2 {
+                ans2 = ans2 * b;
+            }
+            b = b * b;
+        }
+        ans2.clamp();
+
+        // If is quadratic nonresidue, then multiply 2^((a-1)/4)
+        // Sorry, but this is data dependent.
+        let mut b = TWO;
+        let mut ans3 = ans;
+        for i in 0..253 {
+            if i != 2 {
+                ans3 = ans3 * b;
+            }
+            b = b * b;
+        }
+        ans3.carry();
+
+        // Choice answer.
+        if ans2 == ONE {
+            ans = ans;
+        } else {
+            ans = ITEM25519 - ans3;
+        }
+
+        let ans_alt = ITEM25519 - ans;
+
         // Get another residue.
-        let mut ans2 = <i32 as Into<P25519FieldItem>>::into(0) - ans;
-        ans2.carry();
-        Some((ans, ans2))
+        Some((ans, ans_alt))
     }
 
     /// Clamp self into range of [0,2^255-19).
     pub fn clamp(&mut self) {
-        let mut ret = self.clone();
-        let mut ok = true;
-        for i in 0..16 {
-            ret.0[i] -= ITEM25519.0[i];
-            if ret.0[i] < 0 {
-                ok = false;
-            }
-        }
-        if ok {
-            *self = ret;
-            return;
-        }
-        let mut ret = self.clone();
-        let mut ok = true;
-        for i in 0..16 {
-            ret.0[i] -= ITEM25519_2.0[i];
-            if ret.0[i] < 0 {
-                ok = false;
-            }
-        }
-        if ok {
-            *self = ret;
-            return;
-        }
+        let ret1 = *self - ITEM25519;
+        let ret2 = *self - ITEM25519_2;
+        let gt_2 = *self > ITEM25519_2;
+        let gt_1 = *self > ITEM25519;
+        let ret: P25519FieldItem = match (gt_2, gt_1) {
+            (true, _) => ret2,
+            (false, true) => ret1,
+            (false, false) => *self,
+        };
+        let ret = ret.carry_new();
+        *self = ret;
     }
 }
 
@@ -169,7 +208,7 @@ impl From<[u8; 32]> for P25519FieldItem {
     fn from(input: [u8; 32]) -> Self {
         let mut ret = Self([0; 16]);
         for i in 0..16 {
-            ret.0[i] = input[2 * i] as i64 + (input[2 * i + 1] << 8) as i64
+            ret.0[i] = input[2 * i] as i64 + ((input[2 * i + 1] as i64) << 8) as i64
         }
         ret
     }
@@ -222,7 +261,6 @@ impl Mul for P25519FieldItem {
         ret.carry();
         ret.carry();
         ret
-
     }
 }
 
@@ -234,9 +272,64 @@ impl From<i32> for P25519FieldItem {
     }
 }
 
+impl PartialOrd for P25519FieldItem {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let mut equal = false;
+        let mut greater = false;
+        let mut smaller = false;
+        if self == other {
+            equal = true;
+        }
+        for i in (0..16).rev() {
+            if (self.0[i] > other.0[i]) & !smaller {
+                greater = true;
+            }
+            if self.0[i] < other.0[i] {
+                smaller = true;
+            }
+        }
+        match (equal, greater, smaller) {
+            (true, _, _) => Some(Ordering::Equal),
+            (false, true, _) => Some(Ordering::Greater),
+            (false, false, _) => Some(Ordering::Less),
+        }
+    }
+}
+
 #[test]
-fn sqrt25519()
-{
-    let c: P25519FieldItem = 7.into();
-    println!("{:?}",c.sqrt());
+fn sqrt25519() {
+    // Now work for non-quadratic-residues.
+    let c: P25519FieldItem = 4.into();
+    let sqrt = c.sqrt();
+    if let Some(k) = sqrt {
+        let mut sq = k.0 * k.0;
+        sq.clamp();
+        println!(" k: {:?}", k.0.pack());
+        println!("-k: {:?}", (ITEM25519 - k.0).pack());
+        assert_eq!(sq, c);
+    }
+
+    let mut rng = ChaCha20Rng::from_entropy();
+    let mut a = [0u8; 32];
+    for i in 0..100000 {
+        rng.fill_bytes(&mut a);
+        let b: P25519FieldItem = a.into();
+        let b2 = b * b;
+        let (k0, k1) = b2.sqrt().unwrap();
+        assert_eq!((k0 * k0).pack(), b2.pack());
+        assert_eq!((k1 * k1).pack(), b2.pack());
+    }
+}
+
+#[test]
+fn inv25519() {
+    let mut rng = ChaCha20Rng::from_entropy();
+    let mut a = [0u8; 32];
+    for i in 0..20000 {
+        rng.fill_bytes(&mut a);
+        let b: P25519FieldItem = a.into();
+        let b_inv = b.inverse();
+        let c = b * b_inv;
+        assert_eq!(c.pack(), ONE.pack());
+    }
 }

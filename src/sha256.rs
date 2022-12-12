@@ -23,10 +23,10 @@ const K: [u32; 64] = [
     0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 ];
 
-struct SHA256;
+pub struct SHA256;
 
 impl SHA256 {
-    fn do_hash(data: &[u8]) -> [u8; 32] {
+    pub fn do_hash(data: &[u8]) -> [u8; 32] {
         let processed = Self::preprocess(data);
         //println!("processed: {}",processed.encode_hex::<String>());
         Self::process(&processed)
@@ -144,15 +144,15 @@ impl SHA256 {
 }
 
 impl CryptoHash<32> for SHA256 {
-    fn hash(data: &[u8]) -> Result<[u8; 32], CryptError> {
-        Ok(Self::do_hash(data))
+    fn hash(data: &[u8]) -> [u8; 32] {
+        Self::do_hash(data)
     }
 }
 
 #[test]
 fn sha256_test() {
     let data = "abc";
-    let result = SHA256::hash(data.as_ref()).unwrap();
+    let result = SHA256::hash(data.as_ref());
     let result_str: String = result.encode_hex();
     println!("{}", result_str);
     assert_eq!(
@@ -161,7 +161,7 @@ fn sha256_test() {
             .unwrap()
     );
 
-    let result = SHA256::hash(vec![].as_ref()).unwrap();
+    let result = SHA256::hash(vec![].as_ref());
     assert_eq!(
         result,
         <[u8; 32]>::from_hex("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
@@ -172,7 +172,7 @@ fn sha256_test() {
     let zeroes = zeroes.repeat(128);
     println!("zeroes: {}", zeroes.len());
     assert_eq!(
-        SHA256::hash(zeroes.as_ref()).unwrap(),
+        SHA256::hash(zeroes.as_ref()),
         <[u8; 32]>::from_hex("38723a2e5e8a17aa7950dc008209944e898f69a7bd10a23c839d341e935fd5ca")
             .unwrap()
     );
@@ -181,7 +181,7 @@ fn sha256_test() {
     let zeroes = zeroes.repeat(1024);
     println!("zeroes: {}", zeroes.len());
     assert_eq!(
-        SHA256::hash(zeroes.as_ref()).unwrap(),
+        SHA256::hash(zeroes.as_ref()),
         <[u8; 32]>::from_hex("5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef")
             .unwrap()
     );
