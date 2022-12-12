@@ -18,6 +18,8 @@ pub enum CryptError {
     InvalidOperation,
     #[error("integrity failed")]
     HMACFailed,
+    #[error("replay attack")]
+    ReplayAttack,
 }
 
 pub trait Crypt<T> {
