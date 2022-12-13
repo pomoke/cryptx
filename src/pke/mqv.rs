@@ -79,8 +79,8 @@ impl FHMQV {
     /// If no remote keys provided, `None` will be returned.
     fn key_server(&self) -> Result<[u8; 32], ECCError> {
         if let Some((remote_pk, remote_sk)) = self.remote_cred {
-            let y: ModNItem = self.session_key.into();
-            let b: ModNItem = self.privkey.into();
+            let y = self.session_key;
+            let b = self.privkey;
             let a_pk = remote_pk.encode_point();
             let b_pk = self.pubkey.encode_point();
             let x_pk = remote_sk.encode_point();
@@ -92,7 +92,6 @@ impl FHMQV {
             data_d.extend_from_slice(&a_pk[..]);
             data_d.extend_from_slice(&b_pk[..]);
             let d = SHA256::hash(&data_d);
-            let d: ModNItem = d.into();
 
             let mut data_e: Vec<u8> = vec![];
             data_e.extend_from_slice(&y_pk[..]);
@@ -100,12 +99,22 @@ impl FHMQV {
             data_e.extend_from_slice(&a_pk[..]);
             data_e.extend_from_slice(&b_pk[..]);
             let e = SHA256::hash(&data_e);
-            let e: ModNItem = e.into();
 
+            /*
             let s = y + e * b;
             let s2 = s.clone();
             let a_coeff = s * d;
             let point = EdwardsPoint::mul_add(s2.into(), remote_sk, a_coeff.into(), remote_pk);
+            */
+            let s1 = remote_sk * b * e;
+            let s2 = remote_sk * y;
+            let s2 = s1 + s2;
+
+            let s3 = remote_pk * b * e;
+            let s4 = remote_pk * y;
+            let s4 = s3 + s4;
+            let s4 = s4 * d;
+            let point = s2 + s4;
             //let point = s.pack()*(remote_sk + d.pack()*remote_pk);
             let point_bin = point.encode_point();
             let mut data_key: Vec<u8> = vec![];
@@ -127,8 +136,8 @@ impl FHMQV {
     /// If no remote keys provided, `None` will be returned.
     fn key_client(&self) -> Result<[u8; 32], ECCError> {
         if let Some((remote_pk, remote_sk)) = self.remote_cred {
-            let x: ModNItem = self.session_key.into();
-            let a: ModNItem = self.privkey.into();
+            let x = self.session_key;
+            let a = self.privkey;
             let b_pk = remote_pk.encode_point();
             let a_pk = self.pubkey.encode_point();
             let y_pk = remote_sk.encode_point();
@@ -140,7 +149,6 @@ impl FHMQV {
             data_d.extend_from_slice(&a_pk[..]);
             data_d.extend_from_slice(&b_pk[..]);
             let d = SHA256::hash(&data_d);
-            let d: ModNItem = d.into();
 
             let mut data_e: Vec<u8> = vec![];
             data_e.extend_from_slice(&y_pk[..]);
@@ -148,12 +156,20 @@ impl FHMQV {
             data_e.extend_from_slice(&a_pk[..]);
             data_e.extend_from_slice(&b_pk[..]);
             let e = SHA256::hash(&data_e);
-            let e: ModNItem = e.into();
 
-            let s = x + d * a;
-            let s2 = s.clone();
-            let a_coeff = s * e;
-            let point = EdwardsPoint::mul_add(s2.into(), remote_sk, a_coeff.into(), remote_pk);
+            //let s = x + d * a;
+            //let s2 = s.clone();
+            //let a_coeff = s * e;
+            //let point = EdwardsPoint::mul_add(s2.into(), remote_sk, a_coeff.into(), remote_pk);
+            let s1 = remote_sk * a * d;
+            let s2 = remote_sk * x;
+            let s2 = s1 + s2;
+
+            let s3 = remote_pk * a * d;
+            let s4 = remote_pk * x;
+            let s4 = s3 + s4;
+            let s4 = s4 * e;
+            let point = s2 + s4;
             //let point = s.pack()*(remote_sk + e.pack()*remote_pk);
             let point_bin = point.encode_point();
             let mut data_key: Vec<u8> = vec![];
@@ -176,7 +192,7 @@ impl AuthenticatedKEX<32> for FHMQV {}
 #[test]
 fn test_fhmqv() {
     let mut rng = ChaCha20Rng::from_entropy();
-    for _ in 0..100 {
+    for _ in 0..10 {
         let mut a = [0u8; 32];
         let mut b = [0u8; 32];
         let mut x = [0u8; 32];
