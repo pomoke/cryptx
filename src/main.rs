@@ -1,4 +1,5 @@
 pub mod aes;
+pub mod comm;
 pub mod common;
 pub mod galois;
 pub mod mp;
@@ -7,6 +8,7 @@ pub mod sha256;
 pub mod stream;
 pub mod util;
 pub mod wire;
+
 use pke::ec25519::{EdwardsPoint, EdwardsPointCompute, G};
 
 fn main() {

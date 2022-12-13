@@ -8,9 +8,12 @@ use super::mac::HMAC;
 use hex::FromHex;
 /// AES-CTR encryption, HMAC based MAC, MtE mode.
 /// 16 bytes: counter
+///     8 : serial
+///     4 : size
+///     4 : local counter
 /// ....... : encrypted data
 /// 16 bytes: HMAC
-struct AesCtrHmac {
+pub struct AesCtrHmac {
     aes_key: [u8; 16],
     mac_key: [u8; 16],
     /// One serial number can only be used once.
@@ -134,7 +137,7 @@ impl AesCtrHmac {
         let mut counter = u32::from_le_bytes(header[12..16].try_into().unwrap());
         // Check for replay attack.
         if serial <= self.recv_serial {
-            return Err(CryptError::ReplayAttack)
+            return Err(CryptError::ReplayAttack);
         }
         self.recv_serial = serial;
 

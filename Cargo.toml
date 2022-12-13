@@ -15,3 +15,7 @@ rand_chacha = "0.3.1"
 postcard = "1.0.2"
 serde = "1.0.149"
 num-bigint = "0.4"
+tokio = {version = "1",features = ["io-util","sync","full"]}
+tokio-tungstenite = "0"
+async-trait = "0"
+futures-util = "0"
