@@ -29,19 +29,20 @@ enum ConnectionState {
 }
 
 pub struct WsConnection {
-    enc_state: AesCtrHmac,
+    enc_state: Option<AesCtrHmac>,
+
 }
 
 impl WsConnection {
     pub fn new(aes_key: &[u8; 16], mac_key: &[u8; 16], serial: u64) -> Self {
         Self {
-            enc_state: AesCtrHmac::new(aes_key, mac_key, serial),
+            enc_state: Some(AesCtrHmac::new(aes_key, mac_key, serial)),
         }
     }
-    pub async fn client(&mut self) -> Result<()> {
+    pub async fn client_hello(&mut self) -> Result<()> {
         Ok(())
     }
-    pub async fn server(&mut self) -> Result<()> {
+    pub async fn server_hello(&mut self) -> Result<()> {
         Ok(())
     }
 
@@ -68,7 +69,6 @@ impl WsConnection {
                         Ok(_) => {}
                         Err(e) => {
                             println!("{}", e);
-                            panic!();
                         }
                     }
                 }
@@ -82,10 +82,64 @@ impl WsConnection {
                 println!("tcp msg len {}", msglen);
                 tx.send(Message::Binary(buffer[..msglen].to_owned()))
                     .await
+                    ?;
+            }
+            Ok::<(),anyhow::Error>(())
+        });
+        tokio::join!(a, b);
+        Ok(())
+    }
+
+    pub async fn message_crypt(
+        &mut self,
+        mut ws: WebSocketStream<TcpStream>,
+        mut tcp: TcpStream,
+    ) -> Result<()> {
+        let mut buffer: Vec<u8> = vec![];
+        buffer.resize(1024*1024,0);
+        let (mut tx, mut rx) = ws.split();
+        let (mut tcp_rx, mut tcp_tx) = tcp.into_split();
+        let mut state_recv = self.enc_state.as_ref().unwrap().clone();
+        let mut state_send = self.enc_state.as_ref().unwrap().clone();
+        let a = tokio::spawn(async move {
+            loop {
+                let msg = rx.next().await;
+                // Send to tcp.
+                if let Some(k) = msg {
+                    match k {
+                        Ok(Message::Binary(v)) => {
+                            // Decrypt data.
+                            match state_recv.decrypt_stream(&v) {
+                                Ok(data) => {
+                                    tcp_tx.write(&data).await.unwrap();
+                                },
+                                Err(e) => {println!("{}",e);}
+                            }
+                        }
+                        Ok(Message::Close(_)) => {
+                            return;
+                        }
+                        Ok(_) => {}
+                        Err(e) => {
+                            println!("{}", e);
+                            panic!();
+                        }
+                    }
+                }
+            }
+        });
+        let b = tokio::spawn(async move {
+            loop {
+                let _ = tcp_rx.readable().await.unwrap();
+                // Send to ws.
+                let msglen = tcp_rx.read(buffer.as_mut_slice()).await.unwrap();
+                let enc_data = state_send.encrypt_stream(&buffer[..msglen]);
+                tx.send(Message::Binary(enc_data))
+                    .await
                     .unwrap();
             }
         });
-        tokio::join!(a, b);
+        tokio::join!(a, b).0.unwrap();
         Ok(())
     }
 }
@@ -114,7 +168,7 @@ impl WsServer {
             });
         }
 
-        todo!()
+        Ok(())
     }
 }
 
