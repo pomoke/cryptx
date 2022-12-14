@@ -77,7 +77,7 @@ impl FHMQV {
     ///
     /// Server holds b,y.
     /// If no remote keys provided, `None` will be returned.
-    fn key_server(&self) -> Result<[u8; 32], ECCError> {
+    pub fn key_server(&self) -> Result<[u8; 32], ECCError> {
         if let Some((remote_pk, remote_sk)) = self.remote_cred {
             let y = self.session_key;
             let b = self.privkey;
@@ -134,7 +134,7 @@ impl FHMQV {
     /// Compute shared session key for client (initator).
     ///
     /// If no remote keys provided, `None` will be returned.
-    fn key_client(&self) -> Result<[u8; 32], ECCError> {
+    pub fn key_client(&self) -> Result<[u8; 32], ECCError> {
         if let Some((remote_pk, remote_sk)) = self.remote_cred {
             let x = self.session_key;
             let a = self.privkey;

@@ -12,10 +12,16 @@ hex = "0.4.3"
 anyhow = "1.0.66"
 rand = "0.8.5"
 rand_chacha = "0.3.1"
-postcard = "1.0.2"
+postcard = {version = "1.0.2", features = ["alloc"]}
 serde = "1.0.149"
 num-bigint = "0.4"
 tokio = {version = "1",features = ["io-util","sync","full"]}
 tokio-tungstenite = "0"
 async-trait = "0"
 futures-util = "0"
+clap = { version = "4.0.29", features = ["derive"] }
+iced = {version = "0.6"}
+native-dialog = "0.6.3"
+toml = "0.5"
+iced_native = "0.7.0"
+iced_futures = {version="0", features=["tokio"]}

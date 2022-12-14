@@ -13,7 +13,7 @@ use hex::FromHex;
 ///     4 : local counter
 /// ....... : encrypted data
 /// 16 bytes: HMAC
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct AesCtrHmac {
     aes_key: [u8; 16],
     mac_key: [u8; 16],

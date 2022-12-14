@@ -127,6 +127,11 @@ impl EdwardsPoint {
     pub fn is_cofactor(&self) -> bool {
         (*self * EIGHT).pack() == self.pack()
     }
+
+    pub fn get_pubkey(privkey: [u8; 32]) -> [u8; 32] {
+        let point = privkey * G;
+        point.encode_point()
+    }
 }
 
 impl TryFrom<[u8; 32]> for EdwardsPoint {

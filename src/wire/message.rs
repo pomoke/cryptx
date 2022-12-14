@@ -5,41 +5,32 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Signature {
-    signature: Vec<u8>,
-    signed_by: [u8; 32],
+    pub signature: Vec<u8>,
+    pub signed_by: [u8; 32],
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-struct Certificate {
-    exchange_pubkey: [u8; 32], // for exchange
-    sign_pubkey: [u8; 32],     // for signature
-    owner: String,
-    valid_thru: u64,
-    note: u64,
-    signed_by: Vec<u8>,
+pub struct Certificate {
+    pub exchange_pubkey: [u8; 32], // for exchange
+    pub sign_pubkey: [u8; 32],     // for signature
+    pub owner: String,
+    pub valid_thru: u64,
+    pub note: u64,
+    pub signed_by: Vec<u8>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-enum WireMessage {
-    Link {
-        msg: LinkMsg,
-    },
+pub enum WireMessage {
+    Link { msg: LinkMsg },
     // Decrypt data to `struct Message`.
-    Encrypted {
-        id: u64,
-        msg: Vec<u8>,
-        mac: [u8; 32],
-    },
+    Encrypted { msg: Vec<u8> },
     // To signal fatal state after handshake, a valid MAC is required.
-    Fatal {
-        code: u32,
-        mac: [u8; 32],
-    },
+    Fatal { code: u32, mac: [u8; 32] },
 }
 
 #[non_exhaustive]
 #[derive(Clone, Debug, Serialize, Deserialize)]
-enum LinkMsg {
+pub enum LinkMsg {
     FHMQVHandshake {
         identity: [u8; 32],      // MQV public key
         ephemeral_key: [u8; 32], // session key.
@@ -52,22 +43,22 @@ enum LinkMsg {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-enum Message {
+pub enum Message {
     ReKey,
     Data(Packet),
     Fatal { code: u32, mac: [u8; 32] },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-struct Packet {
-    stream_type: StreamType,
+pub struct Packet {
+    pub stream_type: StreamType,
     /// stream tag when multiplex is used.
-    stream: u16,
-    payload: Vec<u8>,
+    pub stream: u16,
+    pub payload: Vec<u8>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-enum StreamType {
+pub enum StreamType {
     TCP,
     UDP,
     IP,
