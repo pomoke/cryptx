@@ -23,7 +23,7 @@ use crate::{
     stream::streamenc::AesCtrHmac,
     wire::{
         self,
-        message::{Certificate, LinkMsg, Packet, WireMessage, StreamType},
+        message::{Certificate, LinkMsg, Packet, StreamType, WireMessage},
     },
 };
 use log::{error, info, log, warn};
@@ -111,6 +111,7 @@ impl WsConnection {
         let mut state_recv = self.enc_state.as_ref().unwrap().clone();
         let mut state_send = self.enc_state.as_ref().unwrap().clone();
         let a = tokio::spawn(async move {
+            let mut error_count = 0;
             loop {
                 let msg = rx.next().await;
                 // Send to tcp.
@@ -131,7 +132,11 @@ impl WsConnection {
                                         tcp_tx.write(&data).await.unwrap();
                                     }
                                     Err(e) => {
+                                        error_count += 1;
                                         eprintln!("{}", e);
+                                        if error_count > 5 {
+                                            panic!("Too many integrity errors!")
+                                        }
                                     }
                                 }
                             } else {
@@ -156,7 +161,11 @@ impl WsConnection {
                 // Send to ws.
                 let msglen = tcp_rx.read(buffer.as_mut_slice()).await.unwrap();
                 let enc_data = state_send.encrypt_stream(&buffer[..msglen]);
-                let enc_data = wire::message::Message::Data(Packet {payload:enc_data,stream:0,stream_type:StreamType::TCP});
+                let enc_data = wire::message::Message::Data(Packet {
+                    payload: enc_data,
+                    stream: 0,
+                    stream_type: StreamType::TCP,
+                });
                 let enc_data = to_allocvec(&enc_data).unwrap();
                 tx.send(Message::Binary(enc_data)).await.unwrap();
             }
@@ -214,7 +223,7 @@ impl WsServer {
                     .await
                     .unwrap();
 
-                println!("shared key {}",key.encode_hex::<String>());
+                println!("shared key {}", key.encode_hex::<String>());
                 // Start stream.
                 let mut conn_state = WsConnection::new(
                     key[0..16].try_into().unwrap(),
@@ -320,15 +329,18 @@ impl WsClient {
 
             // Handover to WsConnection.
             let mut state = self.clone();
+            let mut rng = ChaCha20Rng::from_entropy();
+            let mut sk = [0u8; 32];
+            rng.fill_bytes(&mut sk);
             tokio::spawn(async move {
                 let mut remote_ws = remote_ws;
                 let mut tcp_stream = tcp_stream;
                 let key = state
-                    .client_hello(&mut remote_ws.0, &mut tcp_stream)
+                    .client_hello(&mut remote_ws.0, &mut tcp_stream, sk)
                     .await
                     .unwrap();
                 // Start stream.
-                println!("shared key {}",key.encode_hex::<String>());
+                println!("shared key {}", key.encode_hex::<String>());
                 let mut conn_state = WsConnection::new(
                     key[0..16].try_into().unwrap(),
                     key[16..].try_into().unwrap(),
@@ -348,8 +360,9 @@ impl WsClient {
         &mut self,
         ws: &mut WebSocketStream<TcpStream>,
         tcp: &mut TcpStream,
+        sk: [u8; 32],
     ) -> Result<[u8; 32]> {
-        let mut mqv = FHMQV::new(self.identity_key, self.session_key);
+        let mut mqv = FHMQV::new(self.identity_key, sk);
         // Send client hello.
         let key_send = mqv.send();
 

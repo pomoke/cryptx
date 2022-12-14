@@ -1,5 +1,5 @@
 use super::arith::{ITEM25519, ONE, TWO, ZERO};
-use hex::ToHex;
+use hex::{FromHex, ToHex};
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
 use serde::{Deserialize, Serialize};
@@ -340,7 +340,7 @@ fn test_edward_key_compress() {
     );
 
     let mut rng = ChaCha20Rng::from_entropy();
-    for i in 0..1000 {
+    for i in 0..10 {
         let mut key = [0u8; 32];
         rng.fill_bytes(&mut key[..]);
         //println!("key {}",key.encode_hex::<String>());
@@ -352,4 +352,18 @@ fn test_edward_key_compress() {
             EdwardsPoint::recover_point(point2).unwrap().y.pack()
         );
     }
+
+    let key =
+        <[u8; 32]>::from_hex("a6e3f62ee9e153ce2f5c6689789358cc9ece27c18f41ff1063edb6687a7a352e")
+            .unwrap();
+    let point = key * G;
+    let point2 = point.encode_point();
+    assert_eq!(
+        point.y.pack(),
+        EdwardsPoint::recover_point(point2).unwrap().y.pack()
+    );
+    assert_eq!(
+        point.x.pack(),
+        EdwardsPoint::recover_point(point2).unwrap().x.pack()
+    );
 }

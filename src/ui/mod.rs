@@ -119,6 +119,8 @@ impl Application for UI {
                 self.check_key = k;
             }
             UIMessage::StartPressed => {
+                let mut sk = [0u8; 32];
+                self.rng.fill_bytes(&mut sk);
                 if !self.running {
                     self.running = true;
                     let check_key = <[u8; 32]>::from_hex(&self.check_key).ok();
@@ -130,8 +132,8 @@ impl Application for UI {
                                 self.ws_endpoint.clone(),
                                 self.tcp_endpoint.clone(),
                                 None,
-                                [0u8; 32],
-                                [0u8; 32],
+                                self.key,
+                                sk,
                                 check_key,
                             );
                             return Command::perform(
@@ -190,9 +192,7 @@ impl Application for UI {
             UIMessage::ExitPressed => {
                 exit(0);
             }
-            UIMessage::Spawned(k) => {
-                self.join_handler = Some(k)
-            }
+            UIMessage::Spawned(k) => self.join_handler = Some(k),
             _ => {}
         }
         Command::none()
@@ -310,7 +310,8 @@ impl Application for UI {
                     |x| UIMessage::LocalEndpointChanged(x),
                 ));
                 window = window.push(
-                    text("Remote identity key").horizontal_alignment(alignment::Horizontal::Left),
+                    text("Remote identity key (optional)")
+                        .horizontal_alignment(alignment::Horizontal::Left),
                 );
                 window = window.push(text_input("remote public key", &self.check_key, |x| {
                     UIMessage::KeyChanged(x)
@@ -395,5 +396,5 @@ impl Application for UI {
 
 #[test]
 fn test_from_hex() {
-    println!("{:?}",<[u8;32]>::from_hex("0").unwrap());
+    println!("{:?}", <[u8; 32]>::from_hex("0").unwrap());
 }
