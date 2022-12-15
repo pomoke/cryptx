@@ -16,8 +16,6 @@ use iced::Application;
 use iced::Command;
 use iced::Theme;
 use iced::{Color, Element, Length, Renderer, Sandbox, Settings};
-use iced_native::system::Action;
-use native_dialog::{FileDialog, MessageDialog, MessageType};
 use rand::RngCore;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
@@ -26,7 +24,16 @@ use tokio::task::JoinHandle;
 use crate::comm::ws::WsClient;
 use crate::comm::ws::WsServer;
 use crate::pke::ec25519::G;
+use crate::pke::eddsa::Sr25519;
 use crate::wire::message;
+
+#[derive(Debug, Clone)]
+pub enum SignCheckState {
+    Wait,
+    Valid,
+    Invalid,
+    Fail,
+}
 
 // GUI interface.
 #[derive(Debug, Clone)]
@@ -36,11 +43,16 @@ pub enum UIMessage {
     ConnectPressed,
     ServerPressed,
     ManageKeyPressed,
+    SignPressed,
     StartPressed,
     RemoteEndpointChanged(String),
     LocalEndpointChanged(String),
     KeyChanged(String),
-    SignPressed,
+    SignKeyChanged(String),
+    SignMessageChanged(String),
+    SignResultChanged(String),
+    DoSignPressed,
+    VerifyPressed,
     Noop,
     ExitPressed,
     Spawned(Arc<JoinHandle<Result<(), anyhow::Error>>>),
@@ -53,6 +65,7 @@ pub enum UIPage {
     Server,
     ManageKey,
     Help,
+    Sign,
 }
 // GUI state
 pub struct UI {
@@ -63,18 +76,23 @@ pub struct UI {
     ws_endpoint: String,
     check_key: String,
     key: [u8; 32],
+    sign_key: [u8; 32],
     running: bool,
     last_error: Option<String>,
     last_success: Option<String>,
     rng: ChaCha20Rng,
     join_handler: Option<Arc<JoinHandle<Result<(), anyhow::Error>>>>,
+    signature_state: SignCheckState,
+    signature_check_key: String,
+    signature_message: String,
+    signature_value: String,
 }
 
 impl Application for UI {
     type Message = UIMessage;
     type Executor = executor::Default;
     type Theme = Theme;
-    type Flags = [u8; 32];
+    type Flags = ([u8; 32], [u8; 32]);
     fn new(privkey: Self::Flags) -> (Self, Command<Self::Message>) {
         (
             UI {
@@ -85,11 +103,16 @@ impl Application for UI {
                 ws_endpoint: "".to_owned(),
                 check_key: "".to_owned(),
                 running: false,
-                key: privkey,
+                key: privkey.0,
                 last_error: None,
                 last_success: None,
                 rng: ChaCha20Rng::from_entropy(),
                 join_handler: None,
+                sign_key: privkey.1,
+                signature_state: SignCheckState::Wait,
+                signature_check_key: "".to_owned(),
+                signature_message: "".to_owned(),
+                signature_value: "".to_owned(),
             },
             Command::none(),
         )
@@ -179,6 +202,7 @@ impl Application for UI {
                 }
             }
             UIMessage::SignPressed => {
+                /*
                 let file = FileDialog::new()
                     .set_location("~/Desktop")
                     .show_open_single_file();
@@ -188,12 +212,58 @@ impl Application for UI {
                         // Try to decode.
                     }
                 }
+                */
+                self.page = UIPage::Sign;
             }
             UIMessage::ExitPressed => {
                 exit(0);
             }
             UIMessage::Spawned(k) => self.join_handler = Some(k),
-            _ => {}
+            UIMessage::SignKeyChanged(x) => {
+                self.signature_state = SignCheckState::Wait;
+                self.signature_check_key = x;
+                self.signature_value = "".to_owned();
+            }
+            UIMessage::SignMessageChanged(x) => {
+                self.signature_state = SignCheckState::Wait;
+                self.signature_message = x;
+                self.signature_value = "".to_owned();
+            }
+            UIMessage::SignResultChanged(x) => {
+                self.signature_state = SignCheckState::Wait;
+                self.signature_value = x;
+            }
+            UIMessage::DoSignPressed => {
+                let pubkey = self.sign_key * G;
+                let pubkey = pubkey.encode_point();
+                let pubkey = pubkey.encode_hex::<String>();
+                self.signature_state = SignCheckState::Wait;
+                let sig = Sr25519::sign(self.sign_key, self.signature_message.as_bytes());
+                self.signature_value = format!(
+                    "{}{}",
+                    sig.0.encode_hex::<String>(),
+                    sig.1.encode_hex::<String>()
+                );
+                self.signature_check_key = pubkey;
+            }
+            UIMessage::VerifyPressed => {
+                self.signature_state = SignCheckState::Wait;
+                if let (Ok(sig),Ok(pubkey)) = (<[u8;64]>::from_hex(&self.signature_value),<[u8;32]>::from_hex(&self.signature_check_key)) {
+                    let mut a = [0u8;32];
+                    let mut b = [0u8;32];
+                    for i in 0..32 {
+                        a[i] = sig[i];
+                        b[i] = sig[i+32];
+                    }
+                    self.signature_state = if Sr25519::verify(pubkey, self.signature_message.as_bytes(), a, b).unwrap_or(false)
+                    {SignCheckState::Valid} else {SignCheckState::Invalid};
+
+                } else {
+                    self.signature_state = SignCheckState::Fail;
+                }
+                
+            }
+            UIMessage::Noop => {}
         }
         Command::none()
     }
@@ -219,6 +289,13 @@ impl Application for UI {
                 window = window.push(
                     button(text("Server").horizontal_alignment(alignment::Horizontal::Center))
                         .on_press(UIMessage::ServerPressed)
+                        .style(theme::Button::Primary)
+                        .padding(12)
+                        .width(Length::Fill),
+                );
+                window = window.push(
+                    button(text("Signature").horizontal_alignment(alignment::Horizontal::Center))
+                        .on_press(UIMessage::SignPressed)
                         .style(theme::Button::Primary)
                         .padding(12)
                         .width(Length::Fill),
@@ -339,13 +416,65 @@ impl Application for UI {
                         .width(Length::Fill),
                 );
             }
+            UIPage::Sign => {
+                window = window.push(text("Sign a message").size(48));
+                window = window.push(text("Public Key"));
+                window = window.push(text_input("", &self.signature_check_key, |x| UIMessage::SignKeyChanged(x)));
+                window = window.push(text("Message for Sign"));
+                window = window.push(text_input("", &self.signature_message, |x| {
+                    UIMessage::SignMessageChanged(x)
+                }));
+                window = window.push(text("Signature"));
+                window = window.push(text_input("", &self.signature_value, |x| UIMessage::SignResultChanged(x)));
+                window = window.push(vertical_space(Length::Fill));
+                window = window.push(
+                    button(text("Sign").horizontal_alignment(alignment::Horizontal::Center))
+                        .on_press(UIMessage::DoSignPressed)
+                        .style(theme::Button::Primary)
+                        .padding(12)
+                        .width(Length::Fill),
+                );
+                window = window.push(
+                    button(
+                        text(match self.signature_state {
+                            SignCheckState::Wait => "Verify",
+                            SignCheckState::Valid => "Signature OK",
+                            SignCheckState::Invalid => "Signature **INVALID**",
+                            SignCheckState::Fail => "Error",
+                        })
+                        .horizontal_alignment(alignment::Horizontal::Center),
+                    )
+                    .on_press(UIMessage::VerifyPressed)
+                    .style(match self.signature_state {
+                        SignCheckState::Wait => theme::Button::Primary,
+                        SignCheckState::Valid => theme::Button::Positive,
+                        SignCheckState::Invalid => theme::Button::Destructive,
+                        SignCheckState::Fail => theme::Button::Destructive,
+                    })
+                    .padding(12)
+                    .width(Length::Fill),
+                );
+                window = window.push(
+                    button(text("Exit").horizontal_alignment(alignment::Horizontal::Center))
+                        .on_press(UIMessage::HomePressed)
+                        .style(theme::Button::Secondary)
+                        .padding(12)
+                        .width(Length::Fill),
+                );
+            }
             UIPage::ManageKey => {
                 let pubkey = self.key * G;
                 let pubkey = pubkey.encode_point();
                 let pubkey = pubkey.encode_hex::<String>();
+
                 window = window.push(text("Key Management").size(48));
                 // Show key.
-                window = window.push(text("Public Key"));
+                window = window.push(text("identity key"));
+                window = window.push(text_input("", &pubkey, |x| UIMessage::Noop));
+                window = window.push(text("Sign Key"));
+                let pubkey = self.sign_key * G;
+                let pubkey = pubkey.encode_point();
+                let pubkey = pubkey.encode_hex::<String>();
                 window = window.push(text_input("", &pubkey, |x| UIMessage::Noop));
 
                 window = window.push(vertical_space(Length::Fill));
@@ -377,14 +506,12 @@ impl Application for UI {
                 );
             }
             UIPage::Help => {
-                window = window.push(text("帮助").size(48));
-                window = window.push(scrollable(
-                    text(
-"
-本系统可实现对于已有的明文传输的系统的保密传输，而不需要改变任何已有程序的代码，仅需在两台机器上运行这一程序，并且相应地修改程序所使用或者提供的的服务地址。
-"
-                )
-                ))
+                window = window.push(text("Help"));
+                window = window.push(scrollable(text(
+                    "
+Encrypt TCP tunnel.
+",
+                )))
             }
         }
         container(window.spacing(20))

@@ -28,6 +28,7 @@ struct Args {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub privkey: String,
+    pub signkey: String,
 }
 
 fn main() {
@@ -45,10 +46,11 @@ fn main() {
     let config = fs::read(full_path).unwrap();
     let config: Config = toml::from_slice(&config).unwrap();
     let privkey = <[u8; 32]>::from_hex(&config.privkey).unwrap();
+    let signkey = <[u8; 32]>::from_hex(&config.signkey).unwrap();
 
     // start gui.
     UI::run(Settings {
-        flags: privkey,
+        flags: (privkey, signkey),
         ..Default::default()
     })
     .unwrap();

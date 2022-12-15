@@ -2,44 +2,63 @@ use crate::sha256::SHA256;
 
 // EdDSA - Signature on Twisted Edward curve.
 // This implentation uses legacy parameters, and is not compatible with modern parameters based impls.
-use super::ec25519::{ECCError, EdwardsPoint, G};
-
+use super::{
+    arith_n::ModNItem,
+    ec25519::{ECCError, EdwardsPoint, G},
+};
+use hex::FromHex;
 /// This is not an ed25519, but ElGamal over edward25519.
-pub struct ElGamal;
+pub struct Sr25519;
 
-impl ElGamal {
-    pub fn sign(key: [u8; 32], data: Vec<u8>) -> [u8; 64] {
-        let pubkey = key * G;
+impl Sr25519 {
+    pub fn sign(key: [u8; 32], data: &[u8]) -> ([u8; 32], [u8; 32]) {
+        let p = key * G;
         let mut secret_source = vec![];
-        secret_source.extend_from_slice(&key[..]);
         secret_source.extend_from_slice(&data);
+        secret_source.extend_from_slice(&key[..]);
         let k = SHA256::do_hash(&secret_source);
-        let m = SHA256::do_hash(&data);
-        let m = m * G;
-        let c = k * pubkey + m;
+        let r = k * G;
+        let key: ModNItem = key.into();
+        let mut h = vec![];
+        h.extend_from_slice(&data[..]);
+        h.extend_from_slice(&r.encode_point()[..]);
+        h.extend_from_slice(&p.encode_point()[..]);
+        let k: ModNItem = k.into();
+        let h = SHA256::do_hash(&h);
+        let h: ModNItem = h.into();
+        let s = k + h * key;
 
-        let k = k * G;
-        let k = k.encode_point();
-        let c = c.encode_point();
-        let mut result = [0u8; 64];
-        for i in 0..32 {
-            result[i] = k[i];
-            result[32 + i] = c[i];
-        }
-
-        result
+        (r.into(), s.to_bytes())
     }
 
-    pub fn verify(pubkey: [u8; 32], data: Vec<u8>, sign: [u8; 64]) -> Result<bool, ECCError> {
+    pub fn verify(
+        pubkey: [u8; 32],
+        data: &[u8],
+        r: [u8; 32],
+        s: [u8; 32],
+    ) -> Result<bool, ECCError> {
         let pubkey = EdwardsPoint::recover_point(pubkey).ok_or(ECCError::InvalidPoint)?;
-        let mut k = [0u8; 32];
-        let mut c = [0u8; 32];
-        for i in 0..32 {
-            k[i] = sign[i];
-            c[i] = sign[32 + i];
-        }
-        let k = EdwardsPoint::recover_point(k).ok_or(ECCError::InvalidPoint)?;
-        let c = EdwardsPoint::recover_point(c).ok_or(ECCError::InvalidPoint)?;
-        todo!()
+        let r = EdwardsPoint::recover_point(r).ok_or(ECCError::InvalidPoint)?;
+        let left = s * G;
+        let mut h = vec![];
+        h.extend_from_slice(&data[..]);
+        h.extend_from_slice(&r.encode_point()[..]);
+        h.extend_from_slice(&pubkey.encode_point()[..]);
+        let h = SHA256::do_hash(&h);
+        let right = r + h * pubkey;
+        Ok(left.pack() == right.pack())
     }
+}
+
+#[test]
+fn test_schnorr_sig() {
+    let data = "whatsoever".as_bytes();
+    let privkey =
+        <[u8; 32]>::from_hex("cce23408fda42b852fdd4bae99ed990dbe398182c1d743b3d630958af47dfd96")
+            .unwrap();
+    let pubkey = EdwardsPoint::get_pubkey(privkey);
+    let sig = Sr25519::sign(privkey, data);
+    assert!(Sr25519::verify(pubkey, data, sig.0, sig.1).unwrap());
+    let data = "whatsoever_again".as_bytes();
+    assert!(!Sr25519::verify(pubkey, data, sig.0, sig.1).unwrap());
 }

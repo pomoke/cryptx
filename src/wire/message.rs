@@ -13,10 +13,8 @@ pub struct Signature {
 pub struct Certificate {
     pub exchange_pubkey: [u8; 32], // for exchange
     pub sign_pubkey: [u8; 32],     // for signature
-    pub owner: String,
-    pub valid_thru: u64,
-    pub note: u64,
-    pub signed_by: Vec<u8>,
+    /// pubkey, (schnorr sig)
+    pub signature: Option<([u8; 32], [u8; 32], [u8; 32])>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
