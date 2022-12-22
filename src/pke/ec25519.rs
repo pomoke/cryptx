@@ -12,7 +12,7 @@ use thiserror::Error;
 // p = 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed
 
 // Though ec25519 and curve25519 can be mapped,
-// this conversion will not be used as one key can be safely used on only on algorithm.
+// this conversion will not be used as one key can be safely used on only one algorithm.
 use crate::pke::arith::P25519FieldItem;
 use core::panic;
 use std::ops::{Add, Mul};

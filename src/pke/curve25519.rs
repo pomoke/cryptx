@@ -1,3 +1,5 @@
+use rand::{Rng, RngCore, SeedableRng};
+use rand_chacha::ChaCha20Rng;
 use serde::{Deserialize, Serialize};
 
 // Operations over curve25519.
@@ -9,6 +11,12 @@ use serde::{Deserialize, Serialize};
 use crate::mp::LargeInt;
 use crate::pke::arith::P25519FieldItem;
 use std::ops::{Add, Mul};
+const B: P25519FieldItem = P25519FieldItem([486662, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+const C121665: P25519FieldItem =
+    P25519FieldItem([121665, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+pub const G: [u8; 32] = [
+    9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
 
 /// This struct describes point on curve25519.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,19 +33,20 @@ impl MontgomeryCurvePoint {
         self.z = 1.into();
     }
 
-    pub fn scalar_mul(p: [u8; 32], scalar: [u8; 32]) -> [u8; 32] {
+    pub fn scalar_mul(point: [u8; 32], scalar: [u8; 32]) -> [u8; 32] {
         let mut clamped;
-        let mut bit = 0i64;
         let mut a: P25519FieldItem = 0.into();
-        let mut b = a;
+        let mut b;
         let mut c = a;
         let mut d = a;
         let mut e;
         let mut f;
-        let mut x: P25519FieldItem = p.into();
+        let mut x: P25519FieldItem = point.into();
+        b = x;
+
         clamped = scalar;
         clamped[0] &= 0xf8;
-        clamped[31] = (clamped[32] & 0x7f) | 0x40;
+        clamped[31] = (clamped[31] & 0x7f) | 0x40;
 
         a.0[0] = 1;
         d.0[0] = 1;
@@ -49,7 +58,7 @@ impl MontgomeryCurvePoint {
             e = a + c;
             a = a - c;
             c = b + d;
-            b = b + d;
+            b = b - d;
             d = e * e;
             f = a * a;
             a = c * a;
@@ -58,7 +67,7 @@ impl MontgomeryCurvePoint {
             a = a - c;
             b = a * a;
             c = d - f;
-            a = c * c; //wrong!
+            a = c * C121665;
             a = a + d;
             c = c * a;
             a = d * f;
@@ -67,22 +76,22 @@ impl MontgomeryCurvePoint {
             a.swap(&mut b, bit as i64);
             c.swap(&mut d, bit as i64);
         }
-        c.inverse();
+        c = c.inverse();
         a = a * c;
         a.pack()
     }
 }
 
-impl Add for MontgomeryCurvePoint {
-    type Output = MontgomeryCurvePoint;
-    fn add(self, rhs: Self) -> Self::Output {
-        todo!()
-    }
-}
-
-impl Mul<LargeInt<32>> for MontgomeryCurvePoint {
-    type Output = MontgomeryCurvePoint;
-    fn mul(self, rhs: LargeInt<32>) -> Self::Output {
-        todo!()
-    }
+#[test]
+fn test_montegomery_mul() {
+    let mut rng = ChaCha20Rng::from_entropy();
+    let mut a = [0u8; 32];
+    let mut b = [0u8; 32];
+    rng.fill_bytes(&mut a[..]);
+    rng.fill_bytes(&mut b[..]);
+    let a_pub = MontgomeryCurvePoint::scalar_mul(G, a);
+    let b_pub = MontgomeryCurvePoint::scalar_mul(G, b);
+    let k1 = MontgomeryCurvePoint::scalar_mul(a_pub, b);
+    let k2 = MontgomeryCurvePoint::scalar_mul(b_pub, a);
+    assert_eq!(k1, k2);
 }

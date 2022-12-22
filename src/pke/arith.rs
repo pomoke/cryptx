@@ -194,7 +194,7 @@ impl P25519FieldItem {
 
 impl From<LargeInt<32>> for P25519FieldItem {
     fn from(data: LargeInt<32>) -> Self {
-        data.data.into()
+        todo!()
     }
 }
 
