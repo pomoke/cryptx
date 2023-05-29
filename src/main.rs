@@ -36,8 +36,11 @@ fn main() {
     let args = Args::parse();
     let home_path = env::var("HOME").unwrap_or("/".to_owned());
     let full_path = Path::new(&home_path);
+    #[cfg(target_os = "windows")]
+    let full_path = full_path.join("sst/");
+    #[cfg(not(target_os = "windows"))]
     let full_path = full_path.join(".config/sst/");
-    if !full_path.is_dir() {
+    if !full_path.is_dir() && args.config.is_none() {
         // Create folder.
         fs::create_dir_all(full_path.clone()).unwrap();
     }

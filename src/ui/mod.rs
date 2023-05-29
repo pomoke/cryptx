@@ -523,5 +523,5 @@ Encrypt TCP tunnel.
 
 #[test]
 fn test_from_hex() {
-    println!("{:?}", <[u8; 32]>::from_hex("0").unwrap());
+    println!("{:?}", <[u8; 32]>::from_hex("0").unwrap_err());
 }

@@ -323,7 +323,6 @@ impl WsClient {
 
             // Connect to remote endpoint.
             let remote_link = TcpStream::connect(&self.remote_endpoint).await?;
-            let empty_filter = Request::default();
             // Make websocket from TCP link.
             let remote_ws = client_async("ws://localhost/", remote_link).await?;
 
